@@ -6,11 +6,6 @@ Here is some Dart:
 print('Hello, world!');
 ```
 
-<pre popmark>
-Hello, world!
-</pre>
-
-
 # Segment 2
 
 And here is some more:
@@ -18,10 +13,4 @@ And here is some more:
 ```dart
 print('Goodbye, sweet world!');
 ```
-
-<pre popmark>
-Goodbye, sweet world!
-</pre>
-
-
 

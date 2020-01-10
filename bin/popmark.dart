@@ -7,24 +7,37 @@ enum State { markdown, dart, ignore }
 Future<void> main(List<String> arguments) async {
   if (arguments.isEmpty) {
     showHelp();
+    exit(0);
   } else {
     final targetFile = arguments.first,
-        parser = ArgParser()
-          ..addOption('imports', abbr: 'i')
-          ..addOption('output', abbr: 'o', defaultsTo: targetFile)
-          ..addFlag('help', abbr: 'h', defaultsTo: false)
-          ..addFlag('cleanup', abbr: 'c', defaultsTo: true)
-          ..addFlag('strip', abbr: 's', defaultsTo: false),
-        results = parser.parse(arguments),
+        results = () {
+      try {
+        return (ArgParser()
+              ..addOption('imports', abbr: 'i')
+              ..addOption('output', abbr: 'o', defaultsTo: targetFile)
+              ..addFlag('help', abbr: 'h', defaultsTo: false)
+              ..addFlag('cleanup', abbr: 'c', defaultsTo: true)
+              ..addFlag('strip', abbr: 's', defaultsTo: false))
+            .parse(arguments);
+      } on Exception {
+        showHelp();
+        exit(0);
+      }
+      return null;
+    }(),
 
         /// The name of the file to write to.
         output = results['output'] as String,
+
         // Whether to delete the temporary Dart files afterwards.
         cleanup = results['cleanup'] as bool,
+
         // Whether to remove the code segment output segments.
         strip = results['strip'] as bool,
+
         // Whether to show help.
         help = results['help'] as bool,
+
         // List of Dart imports the code relies on.
         imports = results['imports'] as String,
         importLines = imports == null
@@ -39,26 +52,34 @@ Future<void> main(List<String> arguments) async {
                     line = "import '$library'";
                 return '$line ${split.length > 1 ? split.sublist(1).join(' ') : ''};';
               }).toList(),
+
         // The match that kicks off code recognition.
         openCode = RegExp(r'^```dart'),
+
         // The match that ends code recognition.
         closeCode = RegExp(r'^```'),
-        // The marker to indicate the start of segment output.
-        openPopmark = '<pre popmark>',
-        // The match that kicks off ignore.
-        openPopmarkMatch = RegExp(r'^<pre popmark>'),
-        // The marker to indicate the end of segment output and ignore.
-        closePopmark = '</pre>';
 
-    if (help || !(await File(targetFile).exists())) {
+        // The marker to indicate the start of segment output.
+        openPopmark = '```text',
+
+        // The match that kicks off ignore.
+        openPopmarkMatch = RegExp(r'^```text'),
+
+        // The marker to indicate the end of segment output and ignore.
+        closePopmark = '```';
+
+    if (help) {
       showHelp();
       exit(0);
     }
 
+    if (!(await File(targetFile).exists())) {
+      print('Cannot find file "$targetFile". For help, run: popmark --help');
+      exit(0);
+    }
+
     // The lines of the target file.
-    final lines = (await File(targetFile).readAsString())
-        .replaceAll(RegExp(r'\n\n+'), '\n\n')
-        .split('\n');
+    final lines = await File(targetFile).readAsLines();
 
     var
         // The state of the reader, which determines response to lines.
@@ -68,60 +89,62 @@ Future<void> main(List<String> arguments) async {
         // An index tracker for the code segments.
         index = 0;
 
-    final sink = File(output).openWrite();
+    final contentBuffer = StringBuffer();
     for (final line in lines) {
       switch (state) {
         case State.markdown:
+          // Include markdown in the output.
           if (line.contains(openPopmarkMatch)) {
             state = State.ignore;
           } else {
-            sink.writeln(line);
+            contentBuffer.writeln(line);
+
             if (line.contains(openCode)) {
               state = State.dart;
             }
           }
           break;
         case State.dart:
-          if (line.contains(openPopmarkMatch)) {
-            state = State.ignore;
-          } else {
-            sink.writeln(line);
-            if (line.contains(closeCode)) {
-              final dartFile = '_temp_popmark$index.dart';
-              index++;
-              await File(dartFile).writeAsString(template
-                  .replaceFirst('{IMPORTS}', importLines.join('\n'))
-                  .replaceFirst('{BODY}', code.toString()));
-              index++;
-              final result = await Process.run('dart', [dartFile]);
-              if (!strip) {
-                final resultStdout = result.stdout.toString(),
-                    output = resultStdout.isNotEmpty
-                        ? resultStdout
-                        : result.stderr
-                            .toString()
-                            .split('\n')
-                            .map((line) => line.contains('_temp_popmark')
-                                ? line.split(' ').sublist(1).join(' ')
-                                : line)
-                            .join('\n');
+          contentBuffer.writeln(line);
 
-                sink.writeln('\n$openPopmark\n$output$closePopmark\n');
-              }
+          if (line.contains(closeCode)) {
+            // Execute the code segment and insert its output.
+            final dartFile = '_temp_popmark$index.dart';
+            index++;
+            await File(dartFile).writeAsString(template
+                .replaceFirst('{IMPORTS}', importLines.join('\n'))
+                .replaceFirst('{BODY}', code.toString()));
+            index++;
+            final result = await Process.run('dart', [dartFile]);
 
-              if (cleanup || result.stderr.toString().isNotEmpty) {
-                await File(dartFile).delete();
-              } else {
-                final cleanCode =
-                    (await Process.run('dartfmt', [dartFile])).stdout as String;
-                await File(dartFile).writeAsString(cleanCode);
-              }
+            if (!strip) {
+              final resultStdout = result.stdout.toString(),
+                  output = resultStdout.isNotEmpty
+                      ? resultStdout
+                      : result.stderr
+                          .toString()
+                          .split('\n')
+                          .map((line) => line.contains('_temp_popmark')
+                              ? line.split(' ').sublist(1).join(' ')
+                              : line)
+                          .join('\n');
 
-              code.clear();
-              state = State.markdown;
-            } else {
-              code.writeln(line);
+              contentBuffer.writeln('\n$openPopmark\n$output$closePopmark\n');
             }
+
+            if (cleanup || result.stderr.toString().isNotEmpty) {
+              await File(dartFile).delete();
+            } else {
+              final cleanCode =
+                  (await Process.run('dartfmt', [dartFile])).stdout as String;
+              await File(dartFile).writeAsString(cleanCode);
+            }
+
+            code.clear();
+            state = State.markdown;
+          } else {
+            // Include code segments.
+            code.writeln(line);
           }
           break;
         case State.ignore:
@@ -131,8 +154,11 @@ Future<void> main(List<String> arguments) async {
           break;
       }
     }
-    await sink.flush();
-    await sink.close();
+
+    final content =
+        contentBuffer.toString().replaceAll(RegExp(r'\n\n\n+'), '\n\n');
+
+    await File(output).writeAsString(content);
   }
 }
 
@@ -141,6 +167,20 @@ void showHelp() {
 
 Welcome to popmark, a simple program that POPulates your MARKdown files
 with the output of your documented Dart code!
+
+Popmark expects the Dart code segments in the markdown to be wrapped in 
+marked code fences, for example:
+
+```dart
+print('Hello, world!');
+```
+
+It will insert the segment code output after the code segment, wrapped
+in fences marked as text, for example:
+
+```text
+Hello, world!
+```
 
 Basic use:
 
