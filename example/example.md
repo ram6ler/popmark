@@ -1,16 +1,15 @@
-# Segment 1
+# Imports
 
-Here is some Dart:
+Here is some Dart that needs the `dart:math` and `dart:convert` libraries:
 
 ```dart
-print('Hello, world!');
+print(math.pi);
+var map = {'a': 1, 'b': 2};
+print(json.encode(map));
 ```
 
-# Segment 2
-
-And here is some more:
-
-```dart
-print('Goodbye, sweet world!');
+```text
+3.141592653589793
+{"a":1,"b":2}
 ```
 

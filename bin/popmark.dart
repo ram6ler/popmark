@@ -111,10 +111,11 @@ Future<void> main(List<String> arguments) async {
             // Execute the code segment and insert its output.
             final dartFile = '_temp_popmark$index.dart';
             index++;
+
             await File(dartFile).writeAsString(template
                 .replaceFirst('{IMPORTS}', importLines.join('\n'))
                 .replaceFirst('{BODY}', code.toString()));
-            index++;
+
             final result = await Process.run('dart', [dartFile]);
 
             if (!strip) {
@@ -132,7 +133,7 @@ Future<void> main(List<String> arguments) async {
               contentBuffer.writeln('\n$openPopmark\n$output$closePopmark\n');
             }
 
-            if (cleanup || result.stderr.toString().isNotEmpty) {
+            if (cleanup) {
               await File(dartFile).delete();
             } else {
               final cleanCode =
