@@ -4,7 +4,7 @@ Welcome to `popmark`, a simple library that **pop**ulates your **mark**down file
 
 ## Use cases
 
-When writing markdown documents, we often include simple, short code segments as examples. If we find ourselves repeatedly copying code and output to inset onto our documentation 
+Sometimes, when documenting code, we find outselves  segments as examples. If we find ourselves repeatedly copying code and output to inset onto our documentation 
 
 ## Example
 
