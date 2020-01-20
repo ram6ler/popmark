@@ -125,6 +125,9 @@ Future<void> main(List<String> arguments) async {
     // The lines of the target file.
     final lines = await File(targetFile).readAsLines();
 
+    //
+    final tempDirectory = await Directory('.popmark').create();
+
     var
         // The state of the reader, which determines response to lines.
         state = State.markdown,
@@ -160,15 +163,15 @@ Future<void> main(List<String> arguments) async {
                     executeSegments.contains(segmentIndex)) ||
                 (executeSegments.first == doNotExecute &&
                     !executeSegments.contains(segmentIndex))) {
-              final dartFile = '_temp_popmark$segmentIndex.dart';
+              final tempFileName = '.popmark/_temp_popmark$segmentIndex.dart';
 
-              await File(dartFile).writeAsString(template
+              await File(tempFileName).writeAsString(template
                   .replaceFirst('{IMPORTS}', importLines.join('\n'))
                   .replaceFirst('{TIMER_START}', time ? timerStart : '')
                   .replaceFirst('{BODY}', code.toString())
                   .replaceFirst('{TIMER_END}', time ? timerEnd : ''));
 
-              final result = await Process.run('dart', [dartFile]);
+              final result = await Process.run('dart', [tempFileName]);
 
               if (!strip) {
                 final resultStdout = result.stdout.toString(),
@@ -185,13 +188,13 @@ Future<void> main(List<String> arguments) async {
                 contentBuffer.writeln('\n$openPopmark\n$output$closePopmark\n');
               }
 
-              if (cleanup) {
-                await File(dartFile).delete();
+              /*if (cleanup) {
+                await File(tempFileName).delete();
               } else {
                 final cleanCode =
-                    (await Process.run('dartfmt', [dartFile])).stdout as String;
-                await File(dartFile).writeAsString(cleanCode);
-              }
+                    (await Process.run('dartfmt', [tempFileName])).stdout as String;
+                await File(tempFileName).writeAsString(cleanCode);
+              }*/
             }
 
             code.clear();
@@ -214,6 +217,10 @@ Future<void> main(List<String> arguments) async {
         contentBuffer.toString().replaceAll(RegExp(r'\n\n\n+'), '\n\n');
 
     await File(output).writeAsString(content);
+
+    if (cleanup) {
+      await tempDirectory.delete(recursive: true);
+    }
   }
 }
 
