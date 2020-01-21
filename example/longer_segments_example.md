@@ -22,4 +22,3 @@ for (var i = 0; i < cycle; i++) {
           m    a    s    t
 ```
 
-

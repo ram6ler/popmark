@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert' show json;
 import 'package:args/args.dart';
 
 /// Reader states.
@@ -125,8 +126,16 @@ Future<void> main(List<String> arguments) async {
     // The lines of the target file.
     final lines = await File(targetFile).readAsLines();
 
-    //
-    final tempDirectory = await Directory('.popmark').create();
+    // TODO: gitignore...
+
+    final tempDirectory = (await Directory('.popmark').exists())
+            ? Directory('.popmark')
+            : await Directory('.popmark').create(),
+        cacheFile = File('.popmark/cache.json');
+
+    var cache = (await cacheFile.exists())
+        ? Map<String, String>.from(json.decode(await cacheFile.readAsString()))
+        : <String, String>{};
 
     var
         // The state of the reader, which determines response to lines.
@@ -156,26 +165,28 @@ Future<void> main(List<String> arguments) async {
         case State.dart:
           contentBuffer.writeln(line);
 
+          final include = executeSegments == null ||
+              (executeSegments.first == doExecute &&
+                  executeSegments.contains(segmentIndex)) ||
+              (executeSegments.first == doNotExecute &&
+                  !executeSegments.contains(segmentIndex));
+
           if (line.contains(closeCode)) {
-            // Execute the code segment and insert its output.
-            if (executeSegments == null ||
-                (executeSegments.first == doExecute &&
-                    executeSegments.contains(segmentIndex)) ||
-                (executeSegments.first == doNotExecute &&
-                    !executeSegments.contains(segmentIndex))) {
-              final tempFileName = '.popmark/_temp_popmark$segmentIndex.dart';
+            final codeString = code.toString();
+            if (!cache.containsKey(codeString)) {
+              // Execute the code segment and insert its output into the cache.
+              if (include) {
+                final tempFileName = '.popmark/_temp_popmark$segmentIndex.dart';
 
-              await File(tempFileName).writeAsString(template
-                  .replaceFirst('{IMPORTS}', importLines.join('\n'))
-                  .replaceFirst('{TIMER_START}', time ? timerStart : '')
-                  .replaceFirst('{BODY}', code.toString())
-                  .replaceFirst('{TIMER_END}', time ? timerEnd : ''));
+                await File(tempFileName).writeAsString(template
+                    .replaceFirst('{IMPORTS}', importLines.join('\n'))
+                    .replaceFirst('{TIMER_START}', time ? timerStart : '')
+                    .replaceFirst('{BODY}', codeString)
+                    .replaceFirst('{TIMER_END}', time ? timerEnd : ''));
 
-              final result = await Process.run('dart', [tempFileName]);
-
-              if (!strip) {
-                final resultStdout = result.stdout.toString(),
-                    output = resultStdout.isNotEmpty
+                final result = await Process.run('dart', [tempFileName]),
+                    resultStdout = result.stdout.toString(),
+                    executionOutput = resultStdout.isNotEmpty
                         ? resultStdout
                         : result.stderr
                             .toString()
@@ -185,16 +196,21 @@ Future<void> main(List<String> arguments) async {
                                 : line)
                             .join('\n');
 
-                contentBuffer.writeln('\n$openPopmark\n$output$closePopmark\n');
-              }
+                if (cleanup) {
+                  await File(tempFileName).delete();
+                } else {
+                  final cleanCode =
+                      (await Process.run('dartfmt', [tempFileName])).stdout
+                          as String;
+                  await File(tempFileName).writeAsString(cleanCode);
+                }
 
-              /*if (cleanup) {
-                await File(tempFileName).delete();
-              } else {
-                final cleanCode =
-                    (await Process.run('dartfmt', [tempFileName])).stdout as String;
-                await File(tempFileName).writeAsString(cleanCode);
-              }*/
+                cache[codeString] = executionOutput;
+              }
+            }
+            if (!strip && include && cache.containsKey(codeString)) {
+              contentBuffer.writeln(
+                  '\n$openPopmark\n${cache[codeString]}$closePopmark\n');
             }
 
             code.clear();
@@ -216,11 +232,12 @@ Future<void> main(List<String> arguments) async {
     final content =
         contentBuffer.toString().replaceAll(RegExp(r'\n\n\n+'), '\n\n');
 
+    await cacheFile.writeAsString(json.encode(cache));
     await File(output).writeAsString(content);
 
-    if (cleanup) {
+    /*if (cleanup) {
       await tempDirectory.delete(recursive: true);
-    }
+    }*/
   }
 }
 
