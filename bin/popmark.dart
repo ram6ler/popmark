@@ -218,7 +218,9 @@ Future<void> main(List<String> arguments) async {
           final codeString = codeBuffer.toString();
 
           if (includeSegmentOutput &&
-              (forceExecution || !cacheMap.containsKey(codeString))) {
+              (forceExecution ||
+                  !cacheMap.containsKey(codeString) ||
+                  (cacheMap[codeString]['out'] as String).isEmpty)) {
             // The name of the temporary Dart file to be executed.
             tempFileName = '.popmark/_temp_popmark$segmentIndex.dart';
 
@@ -231,23 +233,9 @@ Future<void> main(List<String> arguments) async {
             final result = await Process.run('dart', [tempFileName]),
                 resultStdout = result.stdout.toString(),
                 resultStderr = result.stderr.toString();
-            /*,
-                  executionOutput = resultStdout.isNotEmpty
-                      ? resultStdout
-                      : result.stderr
-                          .toString()
-                          .split('\n')
-                          .map((line) => line.contains('_temp_popmark')
-                              ? line.split(' ').sublist(1).join(' ')
-                              : line)
-                          .join('\n');*/
 
             if (cleanup && resultStderr.isEmpty) {
               await File(tempFileName).delete();
-            } else {
-              /*final cleanCode = (await Process.run('dartfmt', [tempFileName]))
-                  .stdout as String;
-              await File(tempFileName).writeAsString(cleanCode);*/
             }
 
             cacheMap[codeString] = {'out': resultStdout, 'err': resultStderr};
@@ -290,17 +278,13 @@ Future<void> main(List<String> arguments) async {
     await cacheFile.writeAsString(json.encode(cacheMap));
   }
   await File(outputFileName).writeAsString(content);
-
-  /*if (cleanup) {
-      await tempDirectory.delete(recursive: true);
-    }*/
 }
 
 void showHelp() {
   print('''
 
 Welcome to popmark, a simple program that POPulates your MARKdown files
-with the output of your documented Dart code!
+with the output of embedded Dart code segments!
 
 Popmark expects the Dart code segments in the markdown to be wrapped in 
 marked code fences, for example:
@@ -316,62 +300,57 @@ in fences marked as text, for example:
 Hello, world!
 ```
 
+(Consider wrapping any text you don't want modified in unmarked fences.)
+
 Basic use:
 
   popmark [file] [options] [flags]
 
 Options:
 
-  --execute   -e    Identifies which code segments to or not to execute.
-                    For example, to only execute the 1st and the 3rd
-                    code segment, use:
+  --help      Get help (i.e. see this information).
 
-                    popmark target.md -e 1,3
+  --execute   Identify which code segments to (or not to) execute. For 
+              example, to only execute the 1st and the 3rd code segment, use:
 
-                    To execute all segments except for the 1st and 3rd
-                    segment, use an asterisk:
+                    popmark target.md --execute 1,3
 
-                    popmark target.md -e *1,3
+              To execute all segments except for the 1st and 3rd segment,
+              use an asterisk:
 
-  --help      -h    To get help (i.e. see this information), use:
+                    popmark target.md --execute *1,3
 
-                    popmark -h
+  --output    By default, popmark writes directly to the target file. To 
+              specify a different file to write to, set the output file:
 
-  --output    -o    By default, popmark writes to the target file. To 
-                    specify the file to write to, set the output file:
+                    popmark target.md --output out.md
 
-                    popmark target.md -o out.md
+  --imports   Specify any libraries or packages the documented code relies
+              on, separated by semi-colons. For example:
 
-  --imports   -i    Specify any libraries or packages the documented 
-                    code relies on, separated by semi-colons:
+                    popmark target.md --imports 'dart:io;dart:math'
 
-                    popmark target.md -i 'dart:io;dart:math'
+  --template  Specify the path to the template Dart code to use. For example,
+              template.txt might contains Dart code with the text {BODY} to
+              indicate where the documented code segment should be inserted;
+              to use template.txt as a template, run:
 
-  --template  -t    Specify the path to the template Dart code to use.
-                    For example, if template.txt contains Dart code with
-                    the text {BODY} to indicate where the documented code
-                    should be inserted, we could use it as a template:
-
-                    popmark target.md -t template.txt
+                    popmark target.md --template template.txt
 
 Flags:
 
-  --cleanup   -c    By default, popmark cleans up after itself. Specify 
-                    whether to delete the Dart files popmark runs in the 
-                    background using:
+  --cleanup   By default, popmark cleans up after itself. Specify whether to
+              delete the Dart files popmark runs in the background using:
 
                     popmark target.md --no-cleanup
 
-  --strip     -s    Strip all code segment output:
+  --strip     Strip all code segment output.
 
-                    popmark target.md -s
-
-  --time            Include the execution time in the output.
-
-                    popmark target.md --time
+  --time      Include the execution time in the output.
 
 
-For more information, check out the wiki at ...
+Thanks for your interest!
+Log any issues at https://bitbucket.org/ram6ler/popmark/issues.
 
 ''');
 }

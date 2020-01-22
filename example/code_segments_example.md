@@ -10,6 +10,12 @@ for (var i = 1; i <= 3; i++) {
 }
 ```
 
+```text
+1. Hello, world!
+2. Hello, world!
+3. Hello, world!
+```
+
 ## Segment 2
 
 ... and here is some more...
@@ -18,11 +24,19 @@ for (var i = 1; i <= 3; i++) {
 print('What the heck, world?!');
 ```
 
+```text
+What the heck, world?!
+```
+
 ## Segment 3
 
 ... and here is yet more...
 
 ```dart
 print('Goodbye, world!');
+```
+
+```text
+Goodbye, world!
 ```
 
