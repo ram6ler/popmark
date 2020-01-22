@@ -9,236 +9,291 @@ Future<void> main(List<String> arguments) async {
   if (arguments.isEmpty) {
     showHelp();
     exit(0);
-  } else {
-    final targetFile = arguments.first,
-        results = () {
-      try {
-        return (ArgParser()
-              ..addOption('imports', abbr: 'i')
-              ..addOption('output', abbr: 'o', defaultsTo: targetFile)
-              ..addOption('template', abbr: 't', defaultsTo: 'DEFAULT')
-              ..addOption('execute', abbr: 'e', defaultsTo: 'ALL')
-              ..addFlag('help', abbr: 'h', defaultsTo: false)
-              ..addFlag('cleanup', abbr: 'c', defaultsTo: true)
-              ..addFlag('strip', abbr: 's', defaultsTo: false)
-              ..addFlag('time', defaultsTo: false))
-            .parse(arguments);
-      } on Exception {
-        showHelp();
-        exit(0);
-      }
-      return null;
-    }(),
+  }
 
-        // The name of the file to write to.
-        output = results['output'] as String,
+  final
 
-        // The template to use for temporary Dart files.
-        template = (results['template'] as String).toUpperCase() == 'DEFAULT'
-            ? defaultTemplate
-            : await () async {
-                final templateFile = results['template'] as String;
-                if (await File(templateFile).exists()) {
-                  return await File(templateFile).readAsString();
-                } else {
-                  print(
-                      'Cannot find file "$templateFile". For help, run: popmark --help');
-                  exit(0);
-                }
-                return null;
-              }(),
+      // The file to read markdown from.
+      targetFileName = arguments.first,
 
-        // Which code segments to / not to execute.
-        doExecute = -10,
-        doNotExecute = -20,
-        executeSegments = () {
-      final executeOption = results['execute'] as String;
-      if (executeOption.toUpperCase() == 'ALL') {
-        return null;
-      } else {
-        final cleanExecuteOptions =
-            executeOption.replaceAll(RegExp(r'[^*,;0-9]'), '');
-
-        return <int>[
-          cleanExecuteOptions.isNotEmpty && cleanExecuteOptions[0] == '*'
-              ? doNotExecute
-              : doExecute,
-          ...cleanExecuteOptions
-              .replaceAll('*', '')
-              .split(RegExp(r'[,;]'))
-              .map((x) => int.tryParse(x).abs() - 1)
-        ];
-      }
-    }(),
-
-        // Whether to delete the temporary Dart files afterwards.
-        cleanup = results['cleanup'] as bool,
-
-        // Whether to remove the code segment output segments.
-        strip = results['strip'] as bool,
-
-        // Whether to show help.
-        help = results['help'] as bool,
-
-        // Whether or not to time the execution.
-        time = results['time'] as bool,
-
-        // List of Dart imports the code relies on.
-        imports = results['imports'] as String,
-        importLines = imports == null
-            ? <String>[]
-            : imports.split(';').map((import) {
-                final split = import
-                        .trim()
-                        .split(' ')
-                        .where((token) => token != 'import')
-                        .toList(),
-                    library = split.first.replaceAll(RegExp('[\'"]'), ''),
-                    line = "import '$library'";
-                return '$line ${split.length > 1 ? split.sublist(1).join(' ') : ''};';
-              }).toList(),
-
-        // The match that kicks off code recognition.
-        openCode = RegExp(r'^```dart'),
-
-        // The match that ends code recognition.
-        closeCode = RegExp(r'^```'),
-
-        // The marker to indicate the start of segment output.
-        openPopmark = '```text',
-
-        // The match that kicks off ignore.
-        openPopmarkMatch = RegExp(r'^```text'),
-
-        // The marker to indicate the end of segment output and ignore.
-        closePopmark = '```';
-
-    if (help) {
+      // The results from parsing the arguments.
+      results = () {
+    try {
+      return (ArgParser()
+            ..addOption('imports')
+            ..addOption('output', defaultsTo: targetFileName)
+            ..addOption('template', defaultsTo: 'DEFAULT')
+            ..addOption('execute', defaultsTo: 'ALL')
+            ..addFlag('help', abbr: 'h', defaultsTo: false)
+            ..addFlag('cleanup', defaultsTo: true)
+            ..addFlag('strip', defaultsTo: false)
+            ..addFlag('time', defaultsTo: false)
+            ..addFlag('refresh', defaultsTo: false)
+            ..addFlag('cache', defaultsTo: true))
+          .parse(arguments);
+    } on Exception {
       showHelp();
       exit(0);
     }
+    return null;
+  }(),
 
-    if (!(await File(targetFile).exists())) {
-      print('Cannot find file "$targetFile". For help, run: popmark --help');
-      exit(0);
-    }
+      // The name of the file to write to.
+      outputFileName = results['output'] as String,
 
-    // The lines of the target file.
-    final lines = await File(targetFile).readAsLines();
-
-    // TODO: gitignore...
-
-    final tempDirectory = (await Directory('.popmark').exists())
-            ? Directory('.popmark')
-            : await Directory('.popmark').create(),
-        cacheFile = File('.popmark/cache.json');
-
-    var cache = (await cacheFile.exists())
-        ? Map<String, String>.from(json.decode(await cacheFile.readAsString()))
-        : <String, String>{};
-
-    var
-        // The state of the reader, which determines response to lines.
-        state = State.markdown,
-
-        // A buffer for the code to be executed.
-        code = StringBuffer(),
-
-        // An index tracker for the code segments.
-        segmentIndex = 0;
-
-    final contentBuffer = StringBuffer();
-    for (final line in lines) {
-      switch (state) {
-        case State.markdown:
-          // Include markdown in the output.
-          if (line.contains(openPopmarkMatch)) {
-            state = State.ignore;
-          } else {
-            contentBuffer.writeln(line);
-
-            if (line.contains(openCode)) {
-              state = State.dart;
-            }
-          }
-          break;
-        case State.dart:
-          contentBuffer.writeln(line);
-
-          final include = executeSegments == null ||
-              (executeSegments.first == doExecute &&
-                  executeSegments.contains(segmentIndex)) ||
-              (executeSegments.first == doNotExecute &&
-                  !executeSegments.contains(segmentIndex));
-
-          if (line.contains(closeCode)) {
-            final codeString = code.toString();
-            if (!cache.containsKey(codeString)) {
-              // Execute the code segment and insert its output into the cache.
-              if (include) {
-                final tempFileName = '.popmark/_temp_popmark$segmentIndex.dart';
-
-                await File(tempFileName).writeAsString(template
-                    .replaceFirst('{IMPORTS}', importLines.join('\n'))
-                    .replaceFirst('{TIMER_START}', time ? timerStart : '')
-                    .replaceFirst('{BODY}', codeString)
-                    .replaceFirst('{TIMER_END}', time ? timerEnd : ''));
-
-                final result = await Process.run('dart', [tempFileName]),
-                    resultStdout = result.stdout.toString(),
-                    executionOutput = resultStdout.isNotEmpty
-                        ? resultStdout
-                        : result.stderr
-                            .toString()
-                            .split('\n')
-                            .map((line) => line.contains('_temp_popmark')
-                                ? line.split(' ').sublist(1).join(' ')
-                                : line)
-                            .join('\n');
-
-                if (cleanup) {
-                  await File(tempFileName).delete();
-                } else {
-                  final cleanCode =
-                      (await Process.run('dartfmt', [tempFileName])).stdout
-                          as String;
-                  await File(tempFileName).writeAsString(cleanCode);
-                }
-
-                cache[codeString] = executionOutput;
+      // The template to use for temporary Dart files.
+      codeTemplate = (results['template'] as String).toUpperCase() == 'DEFAULT'
+          ? defaultTemplate
+          : await () async {
+              final templateFile = results['template'] as String;
+              if (await File(templateFile).exists()) {
+                return await File(templateFile).readAsString();
+              } else {
+                print(
+                    'Cannot find file "$templateFile". For help, run: popmark --help');
+                exit(0);
               }
-            }
-            if (!strip && include && cache.containsKey(codeString)) {
-              contentBuffer.writeln(
-                  '\n$openPopmark\n${cache[codeString]}$closePopmark\n');
-            }
+              return null;
+            }(),
 
-            code.clear();
-            state = State.markdown;
-            segmentIndex++;
-          } else {
-            // Include code segments.
-            code.writeln(line);
-          }
-          break;
-        case State.ignore:
-          if (line.contains(closePopmark)) {
-            state = State.markdown;
-          }
-          break;
+      // Marker to execute identified segments.
+      doExecute = -10,
+
+      // Marker to not execute identified segments.
+      doNotExecute = -20,
+
+      // Which code segments to / not to execute.
+      executeSegments = () {
+    final executeOption = results['execute'] as String;
+    if (executeOption.toUpperCase() == 'ALL') {
+      return null;
+    } else {
+      final cleanExecuteOptions =
+          executeOption.replaceAll(RegExp(r'[^*,;0-9]'), '');
+
+      return <int>[
+        cleanExecuteOptions.isNotEmpty && cleanExecuteOptions[0] == '*'
+            ? doNotExecute
+            : doExecute,
+        ...cleanExecuteOptions
+            .replaceAll('*', '')
+            .split(RegExp(r'[,;]'))
+            .map((x) => int.tryParse(x).abs() - 1)
+      ];
+    }
+  }(),
+
+      // Whether to delete the temporary Dart files afterwards.
+      cleanup = results['cleanup'] as bool,
+
+      // Whether to remove the code segment output segments.
+      strip = results['strip'] as bool,
+
+      // Whether to show help.
+      help = results['help'] as bool,
+
+      // Whether or not to time the execution.
+      time = results['time'] as bool,
+
+      // Whether to refresh the cache (delete existing cache).
+      resfresh = results['refresh'] as bool,
+
+      // Whether to overwrite a cache (write created cache).
+      cache = results['cache'] as bool,
+
+      // List of Dart imports the code relies on.
+      imports = results['imports'] as String,
+
+      // Import code lines to insert into the template.
+      importLines = imports == null
+          ? <String>[]
+          : imports.split(';').map((import) {
+              final split = import
+                      .trim()
+                      .split(' ')
+                      .where((token) => token != 'import')
+                      .toList(),
+                  library = split.first.replaceAll(RegExp('[\'"]'), ''),
+                  line = "import '$library'";
+              return '$line ${split.length > 1 ? split.sublist(1).join(' ') : ''};';
+            }).toList(),
+
+      // The match that kicks off code recognition.
+      openCode = RegExp(r'^```dart'),
+
+      // The match that ends code recognition.
+      closeCode = RegExp(r'^```'),
+
+      // The marker to indicate the start of segment output.
+      openCodeOutput = '```text',
+
+      // The match that kicks off ignore.
+      openCodeOutputMatch = RegExp(r'^```text'),
+
+      // The marker to indicate the end of segment output and ignore.
+      closeCodeOutput = '```';
+
+  if (help) {
+    showHelp();
+    exit(0);
+  }
+
+  if (!(await File(targetFileName).exists())) {
+    print('Cannot find file "$targetFileName". For help, run:');
+    print('\npopmark --help\n');
+    exit(0);
+  }
+
+  // The lines of the target file.
+  final lines = await File(targetFileName).readAsLines();
+
+  if (await Directory('.popmark').exists()) {
+    if (resfresh) {
+      final oldCache = File('.popmark/cache.json');
+      if (await oldCache.exists()) {
+        await oldCache.delete();
+        print('Cleared the cache...\n');
       }
     }
+  } else {
+    await Directory('.popmark').create();
+    print('Added folder .popmark for popmark cache.');
+    print('You may want to set up repo ignore...');
+  }
 
-    final content =
-        contentBuffer.toString().replaceAll(RegExp(r'\n\n\n+'), '\n\n');
+  // The cache file.
+  final cacheFile = File('.popmark/cache.json');
 
-    await cacheFile.writeAsString(json.encode(cache));
-    await File(output).writeAsString(content);
+  var
+      // A decode of the json or a new cache map.
+      cacheMap = (await cacheFile.exists())
+          ? Map.from(json.decode(await cacheFile.readAsString()))
+          : <String, Map<String, String>>{},
 
-    /*if (cleanup) {
+      // The state of the reader, which determines response to lines.
+      state = State.markdown,
+
+      // A buffer for the code to be executed.
+      codeBuffer = StringBuffer(),
+
+      // An index tracker for the code segments.
+      segmentIndex = 0,
+
+      // Whether to execute the code even if output is cached.
+      forceExecution = false,
+
+      // File for temporary Dart code.
+      tempFileName = '';
+
+  // A buffer for the final output file's content.
+  final contentBuffer = StringBuffer();
+
+  for (final line in lines) {
+    switch (state) {
+      case State.markdown:
+        if (line.contains(openCodeOutputMatch)) {
+          state = State.ignore;
+        } else {
+          if (line.contains(openCode)) {
+            forceExecution = line.contains('!');
+            state = State.dart;
+            contentBuffer.writeln('```dart');
+          } else {
+            contentBuffer.writeln(line);
+          }
+        }
+        break;
+      case State.dart:
+        contentBuffer.writeln(line);
+
+        // Whether to include the code segment's output.
+        final includeSegmentOutput = executeSegments == null ||
+            (executeSegments.first == doExecute &&
+                executeSegments.contains(segmentIndex)) ||
+            (executeSegments.first == doNotExecute &&
+                !executeSegments.contains(segmentIndex));
+
+        if (line.contains(closeCode)) {
+          // The code to be executed.
+          final codeString = codeBuffer.toString();
+
+          if (includeSegmentOutput &&
+              (forceExecution || !cacheMap.containsKey(codeString))) {
+            // The name of the temporary Dart file to be executed.
+            tempFileName = '.popmark/_temp_popmark$segmentIndex.dart';
+
+            await File(tempFileName).writeAsString(codeTemplate
+                .replaceFirst('{IMPORTS}', importLines.join('\n'))
+                .replaceFirst('{TIMER_START}', time ? timerStart : '')
+                .replaceFirst('{BODY}', codeString)
+                .replaceFirst('{TIMER_END}', time ? timerEnd : ''));
+
+            final result = await Process.run('dart', [tempFileName]),
+                resultStdout = result.stdout.toString(),
+                resultStderr = result.stderr.toString();
+            /*,
+                  executionOutput = resultStdout.isNotEmpty
+                      ? resultStdout
+                      : result.stderr
+                          .toString()
+                          .split('\n')
+                          .map((line) => line.contains('_temp_popmark')
+                              ? line.split(' ').sublist(1).join(' ')
+                              : line)
+                          .join('\n');*/
+
+            if (cleanup && resultStderr.isEmpty) {
+              await File(tempFileName).delete();
+            } else {
+              /*final cleanCode = (await Process.run('dartfmt', [tempFileName]))
+                  .stdout as String;
+              await File(tempFileName).writeAsString(cleanCode);*/
+            }
+
+            cacheMap[codeString] = {'out': resultStdout, 'err': resultStderr};
+          }
+
+          if (!strip &&
+              includeSegmentOutput &&
+              cacheMap.containsKey(codeString)) {
+            void insertOutput(String key) => contentBuffer.writeln(
+                '\n$openCodeOutput\n${cacheMap[codeString][key]}$closeCodeOutput\n');
+
+            if (cacheMap[codeString]['out'].isNotEmpty) {
+              insertOutput('out');
+            }
+            if (cacheMap[codeString]['err'].isNotEmpty) {
+              insertOutput('err');
+            }
+          }
+
+          codeBuffer.clear();
+          state = State.markdown;
+          segmentIndex++;
+        } else {
+          // Include code segments.
+          codeBuffer.writeln(line);
+        }
+        break;
+      case State.ignore:
+        if (line.contains(closeCodeOutput)) {
+          state = State.markdown;
+        }
+        break;
+    }
+  }
+
+  final content =
+      contentBuffer.toString().replaceAll(RegExp(r'\n\n\n+'), '\n\n');
+
+  if (cache) {
+    await cacheFile.writeAsString(json.encode(cacheMap));
+  }
+  await File(outputFileName).writeAsString(content);
+
+  /*if (cleanup) {
       await tempDirectory.delete(recursive: true);
     }*/
-  }
 }
 
 void showHelp() {

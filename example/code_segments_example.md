@@ -5,11 +5,9 @@
 Here is some embedded Dart code...
 
 ```dart
-print('Hello, world!');
-```
-
-```text
-Hello, world!
+for (var i = 1; i <= 3; i++) {
+  print('$i. Hello, world!');
+}
 ```
 
 ## Segment 2
@@ -20,19 +18,11 @@ Hello, world!
 print('What the heck, world?!');
 ```
 
-```text
-What the heck, world?!
-```
-
 ## Segment 3
 
 ... and here is yet more...
 
 ```dart
 print('Goodbye, world!');
-```
-
-```text
-Goodbye, world!
 ```
 
