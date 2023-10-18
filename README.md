@@ -1,51 +1,121 @@
 # popmark
 
-Welcome to `popmark`, a simple library that **pop**ulates your **mark**down files with the output of embedded Dart code segments.
-
+Welcome to `popmark`, a simple library that **pop**ulates your **mark**down files with the output of embedded Dart code segments. This can be helpful if you want to check that the code segments in your readme and other markdown files are working correctly.
 
 ## Basic use
 
 To populate our markdown with the output of embedded code segments, we can run:
 
-```
-popmark [target-markdown-file]
+```sh
+dart run popmark [target-markdown-file]
 ```
 
 This gets popmark to search through the file for code segments marked `dart`, execute those segments, and poplate the markdown file with `text` blocks containing the respective segment output.
 
-(We can use `--strip` to remove all code output blocks.)
+For example, the output of the following Dart code segment was added by running `dart run popmark README.md`:
 
-For example:
+```dart
+final message = 'spamtapaalesrest', cycle = 4;
+for (var i = 0; i < cycle; i++) {
+    final buffer = StringBuffer('  ' * i);
+    for (var j = i; j < message.length; j += cycle) {
+        buffer.write(' ' * cycle + message[j]);
+    }
+    print(buffer);
+}
+```
 
-![](https://bytebucket.org/ram6ler/popmark/wiki/code_segments.gif)
+```text
+    s    t    a    r
+      p    a    l    e
+        a    p    e    s
+          m    a    s    t
+```
 
-## Using libraries and packages
+## Summary and options
 
-We can use `--imports` to specify libraries or packages the code segments rely on.
+Basic use:
 
-For example:
+```sh
+dart run popmark [file] [options] [flags]
+```
 
-![](https://bytebucket.org/ram6ler/popmark/wiki/imports.gif)
+### `--help`
 
-Alternatively, we can specify a Dart template file, with necessary imports, using `--template`. See `--help` for details.
+Get help.
 
-## Cache
+### `--execute`
 
-popmark stores a json cache in a folder `.popmark` (which we may want to tell our repo to ignore). 
+Use `--execute` to identify which code segments to (or not to) execute. For  example, to only execute the 1st and the 3rd code segment, use:
 
-We can force popmark to execute code, whether or not it is cached, using `--refresh`. (We can also force individual code segments to be executed by wrapping them in code blocks marked `dart!` instead of `dart`.)
+```sh
+dart run popmark target.md --execute '1,3'
+```
 
-We can stop popmark from saving a cache, or making changes to an existing cache, using `--no-cache`.
+To execute all segments except for the 1st and 3rd segment, use an asterisk:
 
-(We can thus delete the cache by using both `--refresh` and `--no-cache`, or, of course, by simply running `rm -rf .popmark`.)
+```sh
+dart run popmark target.md --execute '*1,3'
+```
+
+### `--output`
+
+By default, popmark writes directly to the target file. To specify a different file to write to, set the output file:
+
+```sh
+dart run popmark target.md --output out.md
+```
+
+### `--imports`
+
+Specify any libraries or packages the documented code relies on, separated by semi-colons. For example:
+
+```sh
+dart run popmark target.md --imports 'dart:io;dart:math'
+```
+
+### `--template`
+
+Specify the path to a template Dart file to use. For example, `template.txt` might contains Dart code with the text `{BODY}` to indicate where the documented code segment should be inserted; then to use `template.txt` as a template, run:
+
+```sh
+dart run popmark target.md --template template.txt
+```
+
+### `--cleanup`
+
+By default, popmark cleans up after itself by deleting background scripts that it created and used to generate the output. If you don't want this, you can use `--no-cleanup`, in which case these generated files can be found in `.popmark`.
+
+```sh
+dart run popmark target.md --no-cleanup
+```
+
+### `--cache`
+
+By default, popmark saves the output from code segments to a cache (in `.popmark`) so that output does not need to be regenerated in future runs. Execute all segments, whether or not their results are cached. If you don't want this, you can use ```--no-cache```.
+
+### `--refresh`
+
+Use `--refresh` to execute all code segments and insert their results, whether or not the results are stored in the cache.
+
+### `--strip`
+
+Use `--strip` to remove Dart code segment output from a markdown file.
+
+### `--time`
+
+Include the execution time for each code segment in the output.
 
 ## Miscellaneous
 
 * Be sure to save the target file before you unleash popmark on it.
-* popmark overwrites any blocks marked `text`... consider using unmarked blocks for text you do not want modified.
-*  Use `--output output.md` to create a new file rather than overwriting the target.
-*  If the implementation of the embedded code changes between runs, clear the cache (or mark segments `dart!`) to force the segments to be executed.
 
-## Thanks!
+* You might want to add `.popmark`, where popmark stores its cache and any generated temporary Dart files, to your `.gitignore` file.
+
+* popmark overwrites any blocks marked `text` (which it reserves for the output  from Dart code segments). Consider using more specific tags or unmarked blocks for text you do not want modified.
+
+* If the implementation of the embedded code changes between runs, clear the cache (or mark segments `dart!`) to force the segments to be executed.
+
+## Thanks
 
 Thanks for your interest in this project. Please [file any issues here](https://github.com/ram6ler/popmark/issues).

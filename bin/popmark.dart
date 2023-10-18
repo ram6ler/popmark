@@ -1,6 +1,6 @@
-import 'dart:io';
-import 'dart:convert' show json;
-import 'package:args/args.dart';
+import "dart:io";
+import "dart:convert" show json;
+import "package:args/args.dart";
 
 /// Reader states.
 enum State { markdown, dart, ignore }
@@ -12,40 +12,38 @@ Future<void> main(List<String> arguments) async {
   }
 
   final
-
       // The file to read markdown from.
       targetFileName = arguments.first,
 
       // The results from parsing the arguments.
       results = () {
-    try {
-      return (ArgParser()
-            ..addOption('imports')
-            ..addOption('output', defaultsTo: targetFileName)
-            ..addOption('template', defaultsTo: 'DEFAULT')
-            ..addOption('execute', defaultsTo: 'ALL')
-            ..addFlag('help', abbr: 'h', defaultsTo: false)
-            ..addFlag('cleanup', defaultsTo: true)
-            ..addFlag('strip', defaultsTo: false)
-            ..addFlag('time', defaultsTo: false)
-            ..addFlag('refresh', defaultsTo: false)
-            ..addFlag('cache', defaultsTo: true))
-          .parse(arguments);
-    } on Exception {
-      showHelp();
-      exit(0);
-    }
-    return null;
-  }(),
+        try {
+          return (ArgParser()
+                ..addOption("imports", defaultsTo: "")
+                ..addOption("output", defaultsTo: targetFileName)
+                ..addOption("template", defaultsTo: "DEFAULT")
+                ..addOption("execute", defaultsTo: "ALL")
+                ..addFlag("help", abbr: "h", defaultsTo: false)
+                ..addFlag("cleanup", defaultsTo: true)
+                ..addFlag("strip", defaultsTo: false)
+                ..addFlag("time", defaultsTo: false)
+                ..addFlag("refresh", defaultsTo: false)
+                ..addFlag("cache", defaultsTo: true))
+              .parse(arguments);
+        } on Exception {
+          showHelp();
+          exit(0);
+        }
+      }(),
 
       // The name of the file to write to.
-      outputFileName = results['output'] as String,
+      outputFileName = results["output"] as String,
 
       // The template to use for temporary Dart files.
-      codeTemplate = (results['template'] as String).toUpperCase() == 'DEFAULT'
+      codeTemplate = (results["template"] as String).toUpperCase() == "DEFAULT"
           ? defaultTemplate
           : await () async {
-              final templateFile = results['template'] as String;
+              final templateFile = results["template"] as String;
               if (await File(templateFile).exists()) {
                 return await File(templateFile).readAsString();
               } else {
@@ -53,7 +51,6 @@ Future<void> main(List<String> arguments) async {
                     'Cannot find file "$templateFile". For help, run: popmark --help');
                 exit(0);
               }
-              return null;
             }(),
 
       // Marker to execute identified segments.
@@ -64,74 +61,73 @@ Future<void> main(List<String> arguments) async {
 
       // Which code segments to / not to execute.
       executeSegments = () {
-    final executeOption = results['execute'] as String;
-    if (executeOption.toUpperCase() == 'ALL') {
-      return null;
-    } else {
-      final cleanExecuteOptions =
-          executeOption.replaceAll(RegExp(r'[^*,;0-9]'), '');
+        final executeOption = results["execute"] as String;
+        if (executeOption.toUpperCase() == "ALL") {
+          return <int>[];
+        } else {
+          final cleanExecuteOptions =
+              executeOption.replaceAll(RegExp(r"[^*,;0-9]"), "");
 
-      return <int>[
-        cleanExecuteOptions.isNotEmpty && cleanExecuteOptions[0] == '*'
-            ? doNotExecute
-            : doExecute,
-        ...cleanExecuteOptions
-            .replaceAll('*', '')
-            .split(RegExp(r'[,;]'))
-            .map((x) => int.tryParse(x).abs() - 1)
-      ];
-    }
-  }(),
+          return <int>[
+            cleanExecuteOptions.isNotEmpty && cleanExecuteOptions[0] == "*"
+                ? doNotExecute
+                : doExecute,
+            ...cleanExecuteOptions
+                .replaceAll("*", "")
+                .replaceAll(" ", "")
+                .split(RegExp(r"[,;]"))
+                .map((x) => int.tryParse(x)!.abs() - 1)
+          ];
+        }
+      }(),
 
       // Whether to delete the temporary Dart files afterwards.
-      cleanup = results['cleanup'] as bool,
+      cleanup = results["cleanup"] as bool,
 
       // Whether to remove the code segment output segments.
-      strip = results['strip'] as bool,
+      strip = results["strip"] as bool,
 
       // Whether to show help.
-      help = results['help'] as bool,
+      help = results["help"] as bool,
 
       // Whether or not to time the execution.
-      time = results['time'] as bool,
+      time = results["time"] as bool,
 
       // Whether to refresh the cache (delete existing cache).
-      resfresh = results['refresh'] as bool,
+      refresh = results["refresh"] as bool,
 
       // Whether to overwrite a cache (write created cache).
-      cache = results['cache'] as bool,
+      cache = results["cache"] as bool,
 
       // List of Dart imports the code relies on.
-      imports = results['imports'] as String,
+      imports = results["imports"] as String,
 
       // Import code lines to insert into the template.
-      importLines = imports == null
-          ? <String>[]
-          : imports.split(';').map((import) {
-              final split = import
-                      .trim()
-                      .split(' ')
-                      .where((token) => token != 'import')
-                      .toList(),
-                  library = split.first.replaceAll(RegExp('[\'"]'), ''),
-                  line = "import '$library'";
-              return '$line ${split.length > 1 ? split.sublist(1).join(' ') : ''};';
-            }).toList(),
+      importLines = imports.split(";").map((import) {
+        final split = import
+                .trim()
+                .split(" ")
+                .where((token) => token != "import")
+                .toList(),
+            library = split.first.replaceAll(RegExp("['\"]"), ""),
+            line = 'import "$library"';
+        return "$line ${split.length > 1 ? split.sublist(1).join(" ") : ""};";
+      }).toList(),
 
       // The match that kicks off code recognition.
-      openCode = RegExp(r'^```dart'),
+      openCode = RegExp(r"^```dart"),
 
       // The match that ends code recognition.
-      closeCode = RegExp(r'^```'),
+      closeCode = RegExp(r"^```"),
 
       // The marker to indicate the start of segment output.
-      openCodeOutput = '```text',
+      openCodeOutput = "```text",
 
       // The match that kicks off ignore.
-      openCodeOutputMatch = RegExp(r'^```text'),
+      openCodeOutputMatch = RegExp(r"^```text"),
 
       // The marker to indicate the end of segment output and ignore.
-      closeCodeOutput = '```';
+      closeCodeOutput = "```";
 
   if (help) {
     showHelp();
@@ -140,29 +136,29 @@ Future<void> main(List<String> arguments) async {
 
   if (!(await File(targetFileName).exists())) {
     print('Cannot find file "$targetFileName". For help, run:');
-    print('\npopmark --help\n');
+    print("\npopmark --help\n");
     exit(0);
   }
 
   // The lines of the target file.
   final lines = await File(targetFileName).readAsLines();
 
-  if (await Directory('.popmark').exists()) {
-    if (resfresh) {
-      final oldCache = File('.popmark/cache.json');
+  if (await Directory(".popmark").exists()) {
+    if (refresh) {
+      final oldCache = File(".popmark/cache.json");
       if (await oldCache.exists()) {
         await oldCache.delete();
-        print('Cleared the cache...\n');
+        print("Cleared the cache...\n");
       }
     }
   } else {
-    await Directory('.popmark').create();
-    print('Added folder .popmark for popmark cache.');
-    print('You may want to set up repo ignore...');
+    await Directory(".popmark").create();
+    print("Added folder .popmark for popmark cache.");
+    print("You may want to set up git ignore...");
   }
 
   // The cache file.
-  final cacheFile = File('.popmark/cache.json');
+  final cacheFile = File(".popmark/cache.json");
 
   var
       // A decode of the json or a new cache map.
@@ -183,7 +179,7 @@ Future<void> main(List<String> arguments) async {
       forceExecution = false,
 
       // File for temporary Dart code.
-      tempFileName = '';
+      tempFileName = "";
 
   // A buffer for the final output file's content.
   final contentBuffer = StringBuffer();
@@ -195,9 +191,9 @@ Future<void> main(List<String> arguments) async {
           state = State.ignore;
         } else {
           if (line.contains(openCode)) {
-            forceExecution = line.contains('!');
+            forceExecution = line.contains("!");
             state = State.dart;
-            contentBuffer.writeln('```dart');
+            contentBuffer.writeln("```dart");
           } else {
             contentBuffer.writeln(line);
           }
@@ -207,7 +203,7 @@ Future<void> main(List<String> arguments) async {
         contentBuffer.writeln(line);
 
         // Whether to include the code segment's output.
-        final includeSegmentOutput = executeSegments == null ||
+        final includeSegmentOutput = executeSegments.isEmpty ||
             (executeSegments.first == doExecute &&
                 executeSegments.contains(segmentIndex)) ||
             (executeSegments.first == doNotExecute &&
@@ -220,17 +216,17 @@ Future<void> main(List<String> arguments) async {
           if (includeSegmentOutput &&
               (forceExecution ||
                   !cacheMap.containsKey(codeString) ||
-                  (cacheMap[codeString]['out'] as String).isEmpty)) {
+                  (cacheMap[codeString]["out"] as String).isEmpty)) {
             // The name of the temporary Dart file to be executed.
-            tempFileName = '.popmark/_temp_popmark$segmentIndex.dart';
+            tempFileName = ".popmark/_temp_popmark$segmentIndex.dart";
 
             await File(tempFileName).writeAsString(codeTemplate
-                .replaceFirst('{IMPORTS}', importLines.join('\n'))
-                .replaceFirst('{TIMER_START}', time ? timerStart : '')
-                .replaceFirst('{BODY}', codeString)
-                .replaceFirst('{TIMER_END}', time ? timerEnd : ''));
+                .replaceFirst("{IMPORTS}", importLines.join("\n"))
+                .replaceFirst("{TIMER_START}", time ? timerStart : "")
+                .replaceFirst("{BODY}", codeString)
+                .replaceFirst("{TIMER_END}", time ? timerEnd : ""));
 
-            final result = await Process.run('dart', [tempFileName]),
+            final result = await Process.run("dart", [tempFileName]),
                 resultStdout = result.stdout.toString(),
                 resultStderr = result.stderr.toString();
 
@@ -238,20 +234,20 @@ Future<void> main(List<String> arguments) async {
               await File(tempFileName).delete();
             }
 
-            cacheMap[codeString] = {'out': resultStdout, 'err': resultStderr};
+            cacheMap[codeString] = {"out": resultStdout, "err": resultStderr};
           }
 
           if (!strip &&
               includeSegmentOutput &&
               cacheMap.containsKey(codeString)) {
             void insertOutput(String key) => contentBuffer.writeln(
-                '\n$openCodeOutput\n${cacheMap[codeString][key]}$closeCodeOutput\n');
+                "\n$openCodeOutput\n${cacheMap[codeString][key]}$closeCodeOutput\n");
 
-            if (cacheMap[codeString]['out'].isNotEmpty) {
-              insertOutput('out');
+            if (cacheMap[codeString]["out"].isNotEmpty) {
+              insertOutput("out");
             }
-            if (cacheMap[codeString]['err'].isNotEmpty) {
-              insertOutput('err');
+            if (cacheMap[codeString]["err"].isNotEmpty) {
+              insertOutput("err");
             }
           }
 
@@ -272,7 +268,7 @@ Future<void> main(List<String> arguments) async {
   }
 
   final content =
-      contentBuffer.toString().replaceAll(RegExp(r'\n\n\n+'), '\n\n');
+      contentBuffer.toString().replaceAll(RegExp(r"\n\n\n+"), "\n\n");
 
   if (cache) {
     await cacheFile.writeAsString(json.encode(cacheMap));
@@ -281,7 +277,7 @@ Future<void> main(List<String> arguments) async {
 }
 
 void showHelp() {
-  print('''
+  print("""
 
 Welcome to popmark, a simple program that POPulates your MARKdown files
 with the output of embedded Dart code segments!
@@ -290,7 +286,7 @@ Popmark expects the Dart code segments in the markdown to be wrapped in
 marked code fences, for example:
 
 ```dart
-print('Hello, world!');
+print("Hello, world!");
 ```
 
 It will insert the segment code output after the code segment, wrapped
@@ -333,7 +329,7 @@ Options:
   --template  Specify the path to the template Dart code to use. For example,
               template.txt might contains Dart code with the text {BODY} to
               indicate where the documented code segment should be inserted;
-              to use template.txt as a template, run:
+              then to use template.txt as a template, run:
 
                     popmark target.md --template template.txt
 
@@ -343,6 +339,12 @@ Flags:
               delete the Dart files popmark runs in the background using:
 
                     popmark target.md --no-cleanup
+  
+  --refresh   Execute all segments, whether or not their results are cached.
+  
+  --cache     By default, popmark saves code segment results in a cache (in
+              .popmark). Use --no-cache to prevent this behavior. (Using
+              --refresh and --no-cache together thus deleted the current cache.)
 
   --strip     Strip all code segment output.
 
@@ -350,12 +352,12 @@ Flags:
 
 
 Thanks for your interest!
-Log any issues at https://bitbucket.org/ram6ler/popmark/issues.
+Log any issues at https://github.com/ram6ler/popmark/issues.
 
-''');
+""");
 }
 
-final defaultTemplate = r'''
+final defaultTemplate = r"""
 // Generated by popmark.
 
 {IMPORTS}
@@ -366,12 +368,11 @@ main() async {
 {TIMER_END}
   
 }
-''',
-    timerStart = r'''
-  final _stopwatch = Stopwatch();
-  _stopwatch.start();
-''',
-    timerEnd = r'''
+""",
+    timerStart = r"""
+  final _stopwatch = Stopwatch()..start();
+""",
+    timerEnd = r"""
   _stopwatch.stop();
-  print('\n[${_stopwatch.elapsedMicroseconds} μs]');
-''';
+  print("\n[${_stopwatch.elapsedMicroseconds} μs]");
+""";
