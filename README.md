@@ -2,17 +2,27 @@
 
 Welcome to `popmark`, a simple library that **pop**ulates your **mark**down files with the output of embedded Dart code segments. This can be helpful if you want to check that the code segments in your readme and other markdown files are working correctly.
 
+## Install
+
+```sh
+dart pub global activate popmark
+```
+
 ## Basic use
 
 To populate our markdown with the output of embedded code segments, we can run:
 
 ```sh
-dart run popmark [target-markdown-file]
+popmark [target-markdown-file]
 ```
 
 This gets popmark to search through the file for code segments marked `dart`, execute those segments, and poplate the markdown file with `text` blocks containing the respective segment output.
 
-For example, the output of the following Dart code segment was added by running `dart run popmark README.md`:
+For example, the output of the following Dart code segment was added by running:
+
+```sh
+popmark README.md
+```
 
 ```dart
 final message = 'spamtapaalesrest', cycle = 4;
@@ -37,7 +47,7 @@ for (var i = 0; i < cycle; i++) {
 Basic use:
 
 ```sh
-dart run popmark [file] [options] [flags]
+popmark [file] [options] [flags]
 ```
 
 ### `--help`
@@ -49,13 +59,13 @@ Get help.
 Use `--execute` to identify which code segments to (or not to) execute. For  example, to only execute the 1st and the 3rd code segment, use:
 
 ```sh
-dart run popmark target.md --execute '1,3'
+popmark target.md --execute '1,3'
 ```
 
 To execute all segments except for the 1st and 3rd segment, use an asterisk:
 
 ```sh
-dart run popmark target.md --execute '*1,3'
+popmark target.md --execute '*1,3'
 ```
 
 ### `--output`
@@ -63,7 +73,7 @@ dart run popmark target.md --execute '*1,3'
 By default, popmark writes directly to the target file. To specify a different file to write to, set the output file:
 
 ```sh
-dart run popmark target.md --output out.md
+popmark target.md --output out.md
 ```
 
 ### `--imports`
@@ -71,7 +81,7 @@ dart run popmark target.md --output out.md
 Specify any libraries or packages the documented code relies on, separated by semi-colons. For example:
 
 ```sh
-dart run popmark target.md --imports 'dart:io;dart:math'
+popmark target.md --imports 'dart:io;dart:math'
 ```
 
 ### `--template`
@@ -79,7 +89,7 @@ dart run popmark target.md --imports 'dart:io;dart:math'
 Specify the path to a template Dart file to use. For example, `template.txt` might contains Dart code with the text `{BODY}` to indicate where the documented code segment should be inserted; then to use `template.txt` as a template, run:
 
 ```sh
-dart run popmark target.md --template template.txt
+popmark target.md --template template.txt
 ```
 
 ### `--cleanup`
@@ -87,7 +97,7 @@ dart run popmark target.md --template template.txt
 By default, popmark cleans up after itself by deleting background scripts that it created and used to generate the output. If you don't want this, you can use `--no-cleanup`, in which case these generated files can be found in `.popmark`.
 
 ```sh
-dart run popmark target.md --no-cleanup
+popmark target.md --no-cleanup
 ```
 
 ### `--cache`

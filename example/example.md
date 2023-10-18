@@ -5,7 +5,7 @@
 Here are some simple example of popmark in action. This file originally only had the following Dart code segments, and the text segments containing the output of the code were added in by popmark by running:
 
 ```sh
-dart bin/popmark.dart example/example.md
+popmark example/example.md
 ```
 
 ### Segment 1
@@ -75,7 +75,7 @@ for (var i = 0; i < cycle; i++) {
 The following is a code segment that needs the `dart:math` and `dart:convert` libraries. For this code to run correctly, we will need to set the `--imports` option when calling popmark:
 
 ```sh
-dart bin/popmark.dart example/example.md \
+popmark example/example.md \
   --imports 'dart:math as math;dart:convert show json'
 ```
 
@@ -92,8 +92,4 @@ print(json.encode(map));
 {"a":1,"b":2}
 ```
 
-Alternatively, we could create a template Dart file with `{BODY}` to mark where the code segments should appear, and then direct popmark to that file using:
-
-```sh
---template [name-of-file]
-```
+Alternatively, we could create a template Dart file with `{BODY}` to mark where the code segments should appear, and then direct popmark to that file using `--template [name-of-file]`.
