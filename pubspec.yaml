@@ -1,16 +1,17 @@
 name: popmark
 description: A command-line program that populates your markdown files with the output of documented code segments.
-version: 0.2.0
+version: 0.2.1
 homepage: https://github.com/ram6ler/popmark
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.6.0 <4.0.0'
 
 executables:
   popmark: popmark
 
 dependencies:
-  args: ^2.4.2
+  args: ^2.7.0
+  
 
 
 
